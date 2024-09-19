@@ -6,13 +6,16 @@ from docx import Document
 from docx.shared import Pt
 from openai import OpenAI
 from pprint import pprint
-# from joblib import Memory
+from joblib import Memory
 
 DEFAULT_FONT = 'Microsoft YaHei'
 DEFAULT_MODEL = 'gpt-4o'
 
-# mem = Memory(location='/tmp/openai_cache')
-# @mem.cache
+if not os.path.exists(".cache"):
+    os.mkdir(".cache")
+
+mem = Memory(location='.cache')
+@mem.cache
 def llm_completion(prompt):
     client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
     resp = client.chat.completions.create(
