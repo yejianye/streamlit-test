@@ -9,7 +9,7 @@ from pprint import pprint
 from joblib import Memory
 
 DEFAULT_FONT = 'Microsoft YaHei'
-DEFAULT_MODEL = 'gpt-4o'
+DEFAULT_MODEL = 'gpt-4o-2024-08-06'
 
 if not os.path.exists(".cache"):
     os.mkdir(".cache")
@@ -23,6 +23,15 @@ def llm_completion(prompt):
         messages=[{"role": "user", "content": prompt}],
     )
     return resp.choices[0].message.content
+
+# def llm_structured_call(prompt, response_model):
+#     client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+#     completion = client.beta.chat.completions.parse(
+#         model=DEFAULT_MODEL,
+#         messages=[{"role": "user", "content": prompt}],
+#         response_format=response_model,
+#     )
+#     return completion.choices[0].message.parsed
 
 def get_doc_content(doc):
     text = [para.text for para in doc.paragraphs]
@@ -69,7 +78,21 @@ def create_vocabulary(words, article):
     result = [[j.strip() for j in i.split('|')] for i in result]
     return result
 
-def add_content_to_doc(doc, content, font_family=DEFAULT_FONT, font_size=10):
+def fill_in_blanks(article):
+    prompt = f"""
+    在文章划线处填入合适的英文单词，每个单词单独输出一行，单词与单词之间不要有空行。
+    除此之外，不要输出任何其他内容。
+
+    每行的格式为
+    {{英文单词}} {{单词的中文解释}}
+
+    文章内容
+    --------
+    {article}
+    """
+    return llm_completion(prompt)
+
+def add_content_to_doc(doc, content, font_family=DEFAULT_FONT, font_size=10, bold=False):
     # Split the long_text into paragraphs by newline
     paragraphs = content.split('\n')
     # Loop through each paragraph in the list
@@ -79,6 +102,10 @@ def add_content_to_doc(doc, content, font_family=DEFAULT_FONT, font_size=10):
             para = doc.add_paragraph(style=None)
             run = para.add_run(para_text)
             run.font.size = Pt(font_size)
+            run.font.bold = bold
+
+def add_heading_to_doc(doc, heading):
+    add_content_to_doc(doc, heading, font_size=12, bold=True)
 
 def add_vocabulary_table(doc, vocabulary):
     table = doc.tables[0]
@@ -100,8 +127,15 @@ def gen_translation_and_vocabulary(input_file, output_file, show_progress=False)
         st.write("Creating vocabulary from highlighted words...")
     vocabulary = create_vocabulary(words, content)
 
+    if show_progress:
+        st.write("Fill in the blanks...")
+    filled_words = fill_in_blanks(content)
+
     output_doc = Document("template.docx")
     add_vocabulary_table(output_doc, vocabulary)
+    add_heading_to_doc(output_doc, "单词填空")
+    add_content_to_doc(output_doc, filled_words + '\n')
+    add_heading_to_doc(output_doc, "中文翻译")
     add_content_to_doc(output_doc, cn_content)
     output_doc.save(output_file)
     if show_progress:
@@ -119,6 +153,11 @@ def test_vocabulary():
     vocabulary = create_vocabulary(words, content)
     print('\n'.join(words))
     pprint(vocabulary)
+
+def test_fill_in_blank():
+    doc = Document("test.docx")
+    content = get_doc_content(doc)
+    print(fill_in_blanks(content))
 
 def test_add_content():
     doc = Document("template.docx")
